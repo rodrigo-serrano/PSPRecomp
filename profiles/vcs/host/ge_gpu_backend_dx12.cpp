@@ -16,6 +16,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <limits>
+#include <list>
+#include <chrono>
 #include <iterator>
 #include <span>
 #include <sstream>
@@ -2547,14 +2549,125 @@ void index_hud_texture_replacements(HudTextureStore &store) {
 // it (linear + trilinear mips: the enhanced image is meant to be filtered).
 // Returns false, leaving the texture as the guest decoded it, when nothing
 // applies or anything fails.
-bool enhance_hud_texture(const GeGpuDrawDescriptor &draw, std::uint32_t &width,
-                         std::uint32_t &height, std::uint32_t &mip_levels,
+// Finished [HudTextures] results (mip chain included), keyed by the guest
+// content plus every input that shapes the output. VCS cycles a few HUD images
+// through fresh texture-cache keys every frame (two 128x128 sources at
+// 0x08BDBED0/0x08BDBF20 measured at ~26 inserts/s, ~100% recurring content),
+// so the texture cache alone re-ran the upscale for each one. Lookup and
+// promotion are O(1) (hash map + list splice); the least recently used entries
+// are evicted once CacheEntries or CacheMB is exceeded.
+struct HudResultCache {
+    struct Entry {
+        std::vector<std::byte> packed;
+        std::uint32_t source_width{}, source_height{};
+        std::uint32_t width{}, height{}, levels{};
+        std::list<std::uint64_t>::iterator recency;
+    };
+    std::unordered_map<std::uint64_t, Entry> entries;
+    std::list<std::uint64_t> recency; // front = most recently used
+    std::uint64_t bytes{};
+    std::uint64_t hits{}, misses{}, evictions{};
+    std::uint64_t miss_us{}, hit_us{}; // time spent producing vs reusing results
+};
+
+HudResultCache &hud_result_cache() noexcept {
+    static HudResultCache cache;
+    return cache;
+}
+
+void log_hud_result_cache(const HudResultCache &cache) {
+    const std::uint64_t lookups = cache.hits + cache.misses;
+    if (lookups == 0u || (lookups & 255u) != 0u) return;
+    std::ostringstream line;
+    line << "HudTextures cache: hits=" << cache.hits << " misses=" << cache.misses
+         << " evictions=" << cache.evictions << " entries=" << cache.entries.size()
+         << " MiB=" << (cache.bytes >> 20u) << " miss_ms=" << cache.miss_us / 1000u
+         << " hit_ms=" << cache.hit_us / 1000u;
+    runtime_log_line(line.str());
+}
+
+void insert_hud_result(HudResultCache &cache, std::uint64_t key, const std::vector<std::byte> &packed,
+                       std::uint32_t source_width, std::uint32_t source_height,
+                       std::uint32_t width, std::uint32_t height, std::uint32_t levels) {
+    const HudTexturesConfiguration &hud = vcs_configuration().hud_textures;
+    const std::uint64_t byte_limit = static_cast<std::uint64_t>(hud.cache_mb) << 20u;
+    if (hud.cache_entries == 0u || packed.size() > byte_limit) return;
+    // Drop the oldest entries until the new one fits under both limits.
+    while (!cache.recency.empty() &&
+           (cache.entries.size() >= hud.cache_entries || cache.bytes + packed.size() > byte_limit)) {
+        const auto victim = cache.entries.find(cache.recency.back());
+        cache.recency.pop_back();
+        if (victim == cache.entries.end()) continue;
+        cache.bytes -= victim->second.packed.size();
+        cache.entries.erase(victim);
+        ++cache.evictions;
+    }
+    cache.recency.push_front(key);
+    HudResultCache::Entry entry;
+    entry.packed = packed;
+    entry.source_width = source_width;
+    entry.source_height = source_height;
+    entry.width = width;
+    entry.height = height;
+    entry.levels = levels;
+    entry.recency = cache.recency.begin();
+    cache.bytes += entry.packed.size();
+    cache.entries.insert_or_assign(key, std::move(entry));
+}
+
+bool enhance_hud_texture(const GeGpuDrawDescriptor &draw, std::uint64_t content_checksum,
+                         std::uint32_t &width, std::uint32_t &height, std::uint32_t &mip_levels,
                          std::vector<std::byte> &packed, GeGpuDrawDescriptor &sampler_draw) noexcept {
     const VcsConfiguration &config = vcs_configuration();
     const HudTexturesConfiguration &hud = config.hud_textures;
     if (!draw.through || mip_levels != 1u) return false;
     if (hud.filter == HudTextureFilter::Off && !hud.dump && !hud.replace) return false;
     try {
+        const auto finish = [&](std::uint32_t levels) {
+            sampler_draw = draw;
+            sampler_draw.texture_linear = true;
+            sampler_draw.texture_min_linear = true;
+            sampler_draw.texture_mag_linear = true;
+            sampler_draw.texture_mipmap_enabled = levels > 1u;
+            sampler_draw.texture_mipmap_linear = true;
+            // MaxLOD past the real chain is clamped by D3D12; one constant keeps
+            // enhanced textures to four sampler variants (clamp U x clamp V).
+            sampler_draw.texture_max_level = 7u;
+            sampler_draw.texture_level_mode = 0u;
+            sampler_draw.texture_level_offset16 = 0;
+            sampler_draw.texture_selected_level = 0u;
+        };
+        // Everything the result depends on besides the pixels themselves.
+        std::uint64_t result_key = hash_mix(content_checksum, width);
+        result_key = hash_mix(result_key, height);
+        result_key = hash_mix(result_key,
+            static_cast<std::uint64_t>(hud.filter) | (static_cast<std::uint64_t>(hud.max_scale) << 4u) |
+            (static_cast<std::uint64_t>(hud.replace) << 8u) |
+            (static_cast<std::uint64_t>(draw.texture_use_alpha) << 9u) |
+            (static_cast<std::uint64_t>(draw.texture_clamp_u) << 10u) |
+            (static_cast<std::uint64_t>(draw.texture_clamp_v) << 11u));
+        HudResultCache &results = hud_result_cache();
+        const auto started = std::chrono::steady_clock::now();
+        const auto elapsed_us = [&] {
+            return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count());
+        };
+        if (const auto cached = results.entries.find(result_key);
+            cached != results.entries.end() && cached->second.source_width == width &&
+            cached->second.source_height == height) {
+            results.recency.splice(results.recency.begin(), results.recency, cached->second.recency);
+            packed = cached->second.packed;
+            width = cached->second.width;
+            height = cached->second.height;
+            mip_levels = cached->second.levels;
+            finish(mip_levels);
+            ++results.hits;
+            results.hit_us += elapsed_us();
+            log_hud_result_cache(results);
+            return true;
+        }
+        const std::uint32_t source_width = width;
+        const std::uint32_t source_height = height;
         HudTextureStore &store = hud_texture_store();
         if (store.root.empty()) {
             store.root = std::filesystem::path(hud.directory);
@@ -2651,18 +2764,12 @@ bool enhance_hud_texture(const GeGpuDrawDescriptor &draw, std::uint32_t &width,
         width = out_width;
         height = out_height;
         mip_levels = levels;
-        sampler_draw = draw;
-        sampler_draw.texture_linear = true;
-        sampler_draw.texture_min_linear = true;
-        sampler_draw.texture_mag_linear = true;
-        sampler_draw.texture_mipmap_enabled = levels > 1u;
-        sampler_draw.texture_mipmap_linear = true;
-        // MaxLOD past the real chain is clamped by D3D12; one constant keeps
-        // enhanced textures to four sampler variants (clamp U x clamp V).
-        sampler_draw.texture_max_level = 7u;
-        sampler_draw.texture_level_mode = 0u;
-        sampler_draw.texture_level_offset16 = 0;
-        sampler_draw.texture_selected_level = 0u;
+        finish(levels);
+        ++results.misses;
+        results.miss_us += elapsed_us();
+        insert_hud_result(results, result_key, packed, source_width, source_height,
+                          out_width, out_height, levels);
+        log_hud_result_cache(results);
         return true;
     } catch (...) {
         return false;
@@ -2709,7 +2816,7 @@ bool prepare_texture_upload(Dx12GeState &s, const GeGpuDrawDescriptor &draw,
     // that of the guest's decode, so unchanged content keeps hitting the cache
     // without paying for the enhancement again.
     GeGpuDrawDescriptor sampler_draw = draw;
-    if (enhance_hud_texture(draw, base_width, base_height, mip_levels, packed, sampler_draw))
+    if (enhance_hud_texture(draw, checksum, base_width, base_height, mip_levels, packed, sampler_draw))
         expected = packed.size();
     const std::uint32_t entry_limit = vcs_configuration().rendering.texture_cache_entries;
     const std::uint64_t byte_limit = static_cast<std::uint64_t>(vcs_configuration().rendering.texture_cache_mb) * 1024ull * 1024ull;

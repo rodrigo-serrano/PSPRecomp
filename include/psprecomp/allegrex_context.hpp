@@ -627,10 +627,14 @@ struct alignas(16) AllegrexContext {
         // VDOT prefix semantics use a four-lane view even for a shorter encoded vector.
         apply_vfpu_source_prefix_ct<4u, 0u>(source);
         apply_vfpu_source_prefix_ct<4u, 1u>(target);
-        const float result[1]{
-            source[0] * target[0] + source[1] * target[1] +
-            source[2] * target[2] + source[3] * target[3]
-        };
+        // Accumulate one product per statement, in lane order, like the runtime
+        // VDOT path: a single expression lets clang contract it into FMAs.
+        float sum = 0.0f;
+        sum += source[0] * target[0];
+        sum += source[1] * target[1];
+        sum += source[2] * target[2];
+        sum += source[3] * target[3];
+        const float result[1]{sum};
         write_vfpu_vector_with_destination_prefix_ct<DestinationScalarRegister, 1u>(result);
     }
 

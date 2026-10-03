@@ -2682,7 +2682,7 @@ FragmentSetup make_fragment_setup_cached(const std::array<std::uint32_t, 256> &c
         0x9D,0xD2,0x9C,0xD4,0xD5,0xD3,0x1E,0xE8,0xE9,0x9F,0x9E,0x23,
         0xDE,0xE7,0xDF,0x21,0xE0,0xE1,0xDB,0x22,0xC9,0xCA,0x00}};
     struct Cache {
-        std::array<std::uint32_t, regs.size()> values{};
+        std::array<std::uint32_t, std::tuple_size_v<decltype(regs)>> values{};
         FragmentSetup setup{};
         bool valid{};
     };

@@ -13,6 +13,7 @@
 #include "ge_gpu_backend.hpp"
 #include "vcs_project2dfx.hpp"
 #include "vcs_draw_distance_patch.hpp"
+#include "vcs_game_options.hpp"
 #include "savedata_utility_ui.hpp"
 #include "vcs_texture_replacement.hpp"
 #include "vcs_runtime_log.hpp"
@@ -9396,6 +9397,9 @@ void install_profile(psprecomp::Runtime &runtime, std::uint32_t user_arena_start
         // Draw-distance world/far-clip maintenance is tied to a real vblank
         // rather than fragile AOT entry hooks, which local generated gotos can bypass.
         draw_distance_vblank_tick(rt, ctx.gpr[28], display_vblank_index);
+        // [Game] Subtitles/Hud: re-assert the game's own DISPLAY preferences
+        // whenever boot, a save load or the pause menu rewrote them.
+        game_options_vblank_tick(rt.memory(), ctx.gpr[28], display_vblank_index);
         // A movie frame is a finished 480x272 picture with no more image at the
         // sides, so widening it can only stretch it. Present it black-barred at
         // its own shape instead; gameplay keeps the widescreen treatment.

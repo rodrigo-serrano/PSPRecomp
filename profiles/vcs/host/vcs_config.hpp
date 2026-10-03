@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -230,6 +231,14 @@ struct FrontendConfiguration {
     bool mouse_menu{false};
 };
 
+// The game's own front-end preferences (DISPLAY page of the pause menu),
+// forced from the INI. Each field is optional: absent = the game's own value
+// (menu / save) is left untouched. Applied by vcs_game_options.hpp.
+struct GameConfiguration {
+    std::optional<bool> subtitles{};
+    std::optional<bool> hud{};
+};
+
 struct TexturesConfiguration {
     // DDS texture replacement matched by the internal TEX name. Opt-in: with it
     // off the host never opens the game's archives for indexing.
@@ -267,6 +276,7 @@ struct ControlsConfiguration {
 
 struct VcsConfiguration {
     FrontendConfiguration frontend{};
+    GameConfiguration game{};
     TexturesConfiguration textures{};
     ControlsConfiguration controls{};
     DisplayConfiguration display{};

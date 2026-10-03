@@ -70,6 +70,8 @@ int main() {
                    << "FlushEveryLine=false\n"
                    << "[Frontend]\n"
                    << "MouseMenu=false\n"
+                   << "[Game]\n"
+                   << "Subtitles=false\n"
                    << "[Textures]\n"
                    << "Enabled=true\n"
                    << "Directory=MyTextures\n"
@@ -157,6 +159,10 @@ int main() {
                 "Diagnostics.FlushEveryLine was not parsed");
         require(!config.frontend.mouse_menu,
                 "Frontend.MouseMenu was not parsed");
+        require(config.game.subtitles.has_value() && !*config.game.subtitles,
+                "Game.Subtitles was not parsed");
+        require(!config.game.hud.has_value(),
+                "absent Game.Hud must leave the game's own setting untouched");
         require(config.textures.enabled, "Textures.Enabled was not parsed");
         require(config.textures.directory == "MyTextures",
                 "Textures.Directory was not parsed");
@@ -352,6 +358,8 @@ int main() {
                 "missing INI did not preserve PSP internal-resolution default");
         require(missing.controls.ped_camera_up_limit_degrees == 45u,
                 "missing INI did not preserve the stock on-foot camera upper limit");
+        require(!missing.game.subtitles.has_value() && !missing.game.hud.has_value(),
+                "missing INI must not force the game's own display options");
         require(!missing.frontend.mouse_menu,
                 "missing INI did not preserve disabled pause-menu mouse default");
         require(!missing.textures.enabled && missing.textures.directory == "TexturesDDS",

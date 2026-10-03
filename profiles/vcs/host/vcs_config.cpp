@@ -380,6 +380,27 @@ void apply_frontend_key(VcsConfiguration &config, const std::string &key,
     warning(config, line, "unknown [Frontend] key '" + key + "'");
 }
 
+void apply_game_key(VcsConfiguration &config, const std::string &key,
+                    const std::string &value, std::size_t line) {
+    const auto set_optional = [&](std::optional<bool> &target, const char *name) {
+        bool parsed = false;
+        if (!parse_bool(value, parsed)) {
+            warning(config, line, std::string("Game.") + name + " expects true/false");
+            return;
+        }
+        target = parsed;
+    };
+    if (key == "subtitles" || key == "showsubtitles") {
+        set_optional(config.game.subtitles, "Subtitles");
+        return;
+    }
+    if (key == "hud" || key == "hudmode") {
+        set_optional(config.game.hud, "Hud");
+        return;
+    }
+    warning(config, line, "unknown [Game] key '" + key + "'");
+}
+
 void apply_textures_key(VcsConfiguration &config, const std::string &key,
                         const std::string &value, std::size_t line) {
     if (key == "enabled" || key == "ddsreplacement") {
@@ -729,6 +750,8 @@ VcsConfiguration load_vcs_configuration(const std::filesystem::path &path) {
             apply_controls_key(config, key, value, line_number);
         else if (section == "frontend")
             apply_frontend_key(config, key, value, line_number);
+        else if (section == "game")
+            apply_game_key(config, key, value, line_number);
         else if (section == "textures" || section == "texturereplacement")
             apply_textures_key(config, key, value, line_number);
         // Optional modules deliberately own these parsers so the core

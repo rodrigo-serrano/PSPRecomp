@@ -502,6 +502,16 @@ void apply_hud_textures_key(VcsConfiguration &config, const std::string &key,
             config.hud_textures.directory = trimmed;
         return;
     }
+    if (key == "cacheentries") {
+        if (!parse_u32(value, 0u, 65536u, config.hud_textures.cache_entries))
+            warning(config, line, "HudTextures.CacheEntries must be between 0 and 65536");
+        return;
+    }
+    if (key == "cachemb") {
+        if (!parse_u32(value, 0u, 4096u, config.hud_textures.cache_mb))
+            warning(config, line, "HudTextures.CacheMB must be between 0 and 4096");
+        return;
+    }
     warning(config, line, "unknown [HudTextures] key '" + key + "'");
 }
 

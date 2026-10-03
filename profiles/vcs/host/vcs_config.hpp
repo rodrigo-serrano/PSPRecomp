@@ -219,6 +219,12 @@ struct HudTexturesConfiguration {
     bool replace{false};
     // Relative paths are resolved against the executable's directory.
     std::string directory{"TexturesHD"};
+    // LRU cache of finished (enhanced + mip-chained) results keyed by guest
+    // content. VCS cycles some HUD images through fresh texture keys every
+    // frame; without it each recurrence pays the full upscale again. The
+    // least recently used entries are dropped once either limit is exceeded.
+    std::uint32_t cache_entries{256u};
+    std::uint32_t cache_mb{128u};
 };
 
 // The aspect the game itself builds its projection with.  VCS loads the

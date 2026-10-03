@@ -245,6 +245,15 @@ struct GameConfiguration {
     std::optional<bool> hud{};
 };
 
+// [Disc]: host-side handling of the game's data files.
+struct DiscConfiguration {
+    // Read every file under PSP_GAME/USRDIR once on a background thread at
+    // start-up so the OS page cache holds it before the world streams. Cold
+    // reads (e.g. from a compressed filesystem or an HDD) otherwise cost tens
+    // of milliseconds inside a frame. Uses no process memory.
+    bool prefetch{true};
+};
+
 struct TexturesConfiguration {
     // DDS texture replacement matched by the internal TEX name. Opt-in: with it
     // off the host never opens the game's archives for indexing.
@@ -283,6 +292,7 @@ struct ControlsConfiguration {
 struct VcsConfiguration {
     FrontendConfiguration frontend{};
     GameConfiguration game{};
+    DiscConfiguration disc{};
     TexturesConfiguration textures{};
     ControlsConfiguration controls{};
     DisplayConfiguration display{};

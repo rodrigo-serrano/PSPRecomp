@@ -380,6 +380,16 @@ void apply_frontend_key(VcsConfiguration &config, const std::string &key,
     warning(config, line, "unknown [Frontend] key '" + key + "'");
 }
 
+void apply_disc_key(VcsConfiguration &config, const std::string &key,
+                    const std::string &value, std::size_t line) {
+    if (key == "prefetch") {
+        if (!parse_bool(value, config.disc.prefetch))
+            warning(config, line, "Disc.Prefetch expects true/false");
+        return;
+    }
+    warning(config, line, "unknown [Disc] key '" + key + "'");
+}
+
 void apply_game_key(VcsConfiguration &config, const std::string &key,
                     const std::string &value, std::size_t line) {
     const auto set_optional = [&](std::optional<bool> &target, const char *name) {
@@ -762,6 +772,8 @@ VcsConfiguration load_vcs_configuration(const std::filesystem::path &path) {
             apply_frontend_key(config, key, value, line_number);
         else if (section == "game")
             apply_game_key(config, key, value, line_number);
+        else if (section == "disc")
+            apply_disc_key(config, key, value, line_number);
         else if (section == "textures" || section == "texturereplacement")
             apply_textures_key(config, key, value, line_number);
         // Optional modules deliberately own these parsers so the core

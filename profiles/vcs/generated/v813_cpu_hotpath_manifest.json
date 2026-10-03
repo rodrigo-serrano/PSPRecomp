@@ -1,7 +1,7 @@
 {
   "stage": "V8.13 CPU hot path",
-  "generated_cpp_bytes_before": 119797555,
-  "generated_cpp_bytes_after": 119797555,
+  "generated_cpp_bytes_before": 119800108,
+  "generated_cpp_bytes_after": 119800108,
   "generated_cpp_delta": 0,
   "units": 234,
   "entries": 181789,
@@ -9,7 +9,7 @@
   "shared_jr_units": 221,
   "hot_dense_units": 37,
   "hot_dense_entries": 29167,
-  "generated_cpp_bytes": 119797555,
+  "generated_cpp_bytes": 119800108,
   "units_changed_this_run": 0,
   "jr_sites_rewritten_this_run": 0,
   "hot_units": [

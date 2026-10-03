@@ -438,11 +438,10 @@ if(WIN32)
         host/vcs_runtime_log.cpp
         host/vcs_tier2_superblocks.cpp
         host/vcs_config.cpp
-        host/vcs_draw_distance_patch.cpp
         ${VCS_PROPER_SHADERS_SOURCES}
         host/vcs_camera_input.cpp
         host/vcs_vehicle_input.cpp)
     target_include_directories(vcs_dx12_ge_probe PRIVATE host "${PROJECT_SOURCE_DIR}/include")
-    target_link_libraries(vcs_dx12_ge_probe PRIVATE psprecomp_core d3d12 dxgi d3dcompiler dxguid)
+    target_link_libraries(vcs_dx12_ge_probe PRIVATE d3d12 dxgi d3dcompiler dxguid)
     vcs_set_runtime_output(vcs_dx12_ge_probe)
 endif()

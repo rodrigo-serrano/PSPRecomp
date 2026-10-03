@@ -208,6 +208,14 @@ int main(int argc, char **argv) {
     setenv("PSPRECOMP_GE_ASYNC", async_opt_in ? "1" : "0", 1);
     setenv("PSPRECOMP_GE_PARALLEL_VERTEX_DECODE", parallel_decode_enabled ? "1" : "0", 1);
 #endif
+    // PSPRECOMP_STDERR_FILE=<path>: send stderr (every [audio-host], [frame-*]
+    // ... diagnostic) to a file. A GUI build has no console, and Proton drops
+    // the stream entirely.
+    if (const char *stderr_file = std::getenv("PSPRECOMP_STDERR_FILE");
+        stderr_file != nullptr && *stderr_file != '\0') {
+        if (std::freopen(stderr_file, "w", stderr) != nullptr)
+            std::setvbuf(stderr, nullptr, _IONBF, 0);
+    }
     try {
         const std::filesystem::path executable_directory =
             native_executable_directory(argc > 0 ? argv[0] : nullptr);

@@ -190,6 +190,11 @@ void apply_display_key(VcsConfiguration &config, const std::string &key,
             warning(config, line, "Display.ShowFPS expects true/false");
         return;
     }
+    if (key == "vsync") {
+        if (!parse_bool(value, config.display.vsync))
+            warning(config, line, "Display.VSync expects true/false");
+        return;
+    }
     warning(config, line, "unknown [Display] key '" + key + "'");
 }
 
@@ -439,6 +444,46 @@ void apply_widescreen_key(VcsConfiguration &config, const std::string &key,
     warning(config, line, "unknown [Widescreen] key '" + key + "'");
 }
 
+void apply_hud_textures_key(VcsConfiguration &config, const std::string &key,
+                            const std::string &value, std::size_t line) {
+    if (key == "filter" || key == "upscale") {
+        const std::string mode = lowercase_copy(trim_copy(value));
+        if (mode == "off" || mode == "none" || mode == "false")
+            config.hud_textures.filter = HudTextureFilter::Off;
+        else if (mode == "smooth")
+            config.hud_textures.filter = HudTextureFilter::Smooth;
+        else if (mode == "sharp" || mode == "true")
+            config.hud_textures.filter = HudTextureFilter::Sharp;
+        else
+            warning(config, line, "HudTextures.Filter expects Off, Smooth or Sharp");
+        return;
+    }
+    if (key == "maxscale" || key == "scale") {
+        if (!parse_u32(value, 2u, 4u, config.hud_textures.max_scale))
+            warning(config, line, "HudTextures.MaxScale must be between 2 and 4");
+        return;
+    }
+    if (key == "dump") {
+        if (!parse_bool(value, config.hud_textures.dump))
+            warning(config, line, "HudTextures.Dump expects true/false");
+        return;
+    }
+    if (key == "replace") {
+        if (!parse_bool(value, config.hud_textures.replace))
+            warning(config, line, "HudTextures.Replace expects true/false");
+        return;
+    }
+    if (key == "directory" || key == "path") {
+        const std::string trimmed = trim_copy(value);
+        if (trimmed.empty())
+            warning(config, line, "HudTextures.Directory must not be empty");
+        else
+            config.hud_textures.directory = trimmed;
+        return;
+    }
+    warning(config, line, "unknown [HudTextures] key '" + key + "'");
+}
+
 void apply_timing_key(VcsConfiguration &config, const std::string &key,
                       const std::string &value, std::size_t line) {
     if (key == "framerate" || key == "fps" || key == "targetfps") {
@@ -678,6 +723,8 @@ VcsConfiguration load_vcs_configuration(const std::filesystem::path &path) {
             apply_testing_key(config, key, value, line_number);
         else if (section == "widescreen")
             apply_widescreen_key(config, key, value, line_number);
+        else if (section == "hudtextures" || section == "hud textures")
+            apply_hud_textures_key(config, key, value, line_number);
         else if (section == "controls")
             apply_controls_key(config, key, value, line_number);
         else if (section == "frontend")

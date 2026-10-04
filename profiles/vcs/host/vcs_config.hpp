@@ -287,6 +287,15 @@ struct ControlsConfiguration {
     bool modern_control_scheme{false};
 };
 
+// [Disc]: host-side handling of the game's data files.
+struct DiscConfiguration {
+    // Read every file under PSP_GAME/USRDIR once on a background thread at
+    // start-up so the OS page cache holds it before the world streams. Cold
+    // reads (e.g. from a compressed filesystem or an HDD) otherwise cost tens
+    // of milliseconds inside a frame. Uses no process memory.
+    bool prefetch{true};
+};
+
 struct VcsConfiguration {
     GameConfiguration game{};
     ControlsConfiguration controls{};
@@ -297,6 +306,7 @@ struct VcsConfiguration {
     DiagnosticsConfiguration diagnostics{};
     WidescreenConfiguration widescreen{};
     HudTexturesConfiguration hud_textures{};
+    DiscConfiguration disc{};
     VolumetricCloudsConfiguration volumetric_clouds{};
     std::filesystem::path source_path{};
     // Where the executable lives. Saves go beside it rather than into the game
